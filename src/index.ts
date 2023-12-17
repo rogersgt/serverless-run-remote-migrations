@@ -249,7 +249,7 @@ export default class ServerlessRunRemoteMigrations {
           res(null);
         }
       });
-      buff.on('error', console.error);
+      buff.on('error', this.log);
     });
   }
 
