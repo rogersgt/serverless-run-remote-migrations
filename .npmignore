@@ -1,0 +1,7 @@
+node_modules
+README.md
+*.log
+*.env
+*.zip
+.DS_Store
+src

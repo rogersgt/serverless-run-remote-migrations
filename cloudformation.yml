@@ -1,0 +1,160 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Database migrations task
+
+Parameters:
+  RepoName:
+    Type: String
+
+  Image:
+    Type: String
+
+  Cpu:
+    Type: Number
+
+  Memory:
+    Type: Number
+
+  SecretArn:
+    Type: String
+    Default: ''
+
+  SecretName:
+    Type: String
+    Default: DATABASE_URL
+
+  Command:
+    Type: CommaDelimitedList
+
+  TaskRoleArn:
+    Type: String
+    Default: ''
+
+  SecretMode:
+    Type: String
+    AllowedValues:
+      - ssm
+      - secretsmanager
+    Default: ssm
+
+Conditions:
+  UseTaskRoleArn: !Not [!Equals [!Ref 'TaskRoleArn', '']]
+  MountSecret: !Not [!Equals [!Ref 'SecretArn', '']]
+  UseSsmSecret: !And
+    - !Condition MountSecret
+    - !Equals [!Ref 'SecretMode', 'ssm']
+  UseSecretsManager: !And
+    - !Condition MountSecret
+    - !Equals [!Ref 'SecretMode', 'secretsmanager']
+
+Resources:
+  Task:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+      Memory: !Ref 'Memory'
+      Cpu: !Ref 'Cpu'
+      ExecutionRoleArn: !GetAtt FargateTaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: !Sub '${RepoName}-migrations'
+          Image: !Ref 'Image'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              'awslogs-region': !Ref 'AWS::Region'
+              'awslogs-group': !Ref LogGroup
+              'awslogs-stream-prefix': migrations
+          Secrets: !If
+            - MountSecret
+            - - Name: !Ref 'SecretName'
+                ValueFrom: !Ref 'SecretArn'
+            - !Ref 'AWS::NoValue'
+          Command: !Ref 'Command'
+      TaskRoleArn: !If
+      - UseTaskRoleArn
+      - !Ref 'TaskRoleArn'
+      - !Ref 'AWS::NoValue'
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 90
+
+  FargateTaskExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service:
+                - 'ecs-tasks.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Description: 'Execution role for Amazon ECS Fargate tasks'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: GetSecret
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement: !If
+              - UseSsmSecret
+              # ssm mode
+              - - Effect: Allow
+                  Action:
+                    - ssm:GetParameters
+                    - ssm:GetParameter
+                  Resource:  !Ref 'SecretArn'
+                - Effect: Allow
+                  Action:
+                    - kms:Decrypt
+                  Resource: '*'
+              # secretsmanager mode
+              - - Effect: Allow
+                  Action:
+                    - secretsmanager:GetSecretValue
+                  Resource: !Ref 'SecretArn'
+                - Effect: Allow
+                  Action:
+                    - kms:Decrypt
+                  Resource: '*'
+
+  FargateServiceLinkedRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service:
+                - ecs.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: 'Service-linked role for AWS Fargate in ECS'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+
+  ECSCluster:
+    Type: 'AWS::ECS::Cluster'
+    DependsOn:
+      - FargateServiceLinkedRole
+    Properties:
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+        - CapacityProvider: FARGATE_SPOT
+          Weight: 1
+
+Outputs:
+  TaskArn:
+    Value: !GetAtt Task.TaskDefinitionArn
+
+  ClusterName:
+    Value: !Ref ECSCluster
