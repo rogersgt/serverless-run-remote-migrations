@@ -1,6 +1,6 @@
 {
   "name": "serverless-run-remote-migrations",
-  "version": "0.0.1-beta",
+  "version": "0.0.2-beta",
   "description": "Run database migrations against your database instance before deploying your serverless app.",
   "main": "index.js",
   "scripts": {

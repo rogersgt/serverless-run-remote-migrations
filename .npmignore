@@ -6,3 +6,5 @@ README.md
 .DS_Store
 src
 tsconfig.json
+.eslintrc
+.vscode
