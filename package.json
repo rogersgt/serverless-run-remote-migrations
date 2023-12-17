@@ -1,10 +1,10 @@
 {
   "name": "serverless-run-remote-migrations",
-  "version": "0.0.4-beta",
+  "version": "0.0.5-beta",
   "description": "Run database migrations against your database instance before deploying your serverless app.",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "scripts": {
-    "build": "rm -rf dist && tsc --outDir dist",
+    "build": "rm -rf dist && tsc --outDir dist && mkdir -p dist/src/cloudformation && cp src/cloudformation/* dist/src/cloudformation/",
     "lint": "eslint src",
     "test": "npm run lint && npm run build",
     "prepublish": "npm test"
