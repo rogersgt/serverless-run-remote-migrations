@@ -1,6 +1,6 @@
 {
   "name": "serverless-run-remote-migrations",
-  "version": "0.0.3-beta",
+  "version": "0.0.4-beta",
   "description": "Run database migrations against your database instance before deploying your serverless app.",
   "main": "dist/index.js",
   "scripts": {
@@ -33,5 +33,6 @@
   },
   "peerDependencies": {
     "serverless": ">=3.3.0"
-  }
+  },
+  "files": ["dist/**"]
 }
