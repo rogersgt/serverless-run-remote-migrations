@@ -5,3 +5,4 @@ README.md
 *.zip
 .DS_Store
 src
+tsconfig.json

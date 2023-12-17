@@ -1,11 +1,13 @@
 {
   "name": "serverless-run-remote-migrations",
-  "version": "1.0.0",
+  "version": "0.0.1-beta",
   "description": "Run database migrations against your database instance before deploying your serverless app.",
   "main": "index.js",
   "scripts": {
     "build": "rm -rf dist && tsc --outDir dist",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "test": "npm run lint && npm run build",
+    "prepublish": "npm test"
   },
   "author": "Grady T Rogers",
   "license": "MIT",

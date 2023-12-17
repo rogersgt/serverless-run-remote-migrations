@@ -20,7 +20,6 @@
     "strictNullChecks": true,
     "rootDir": "./",
     "typeRoots": [
-      "./src/types",
       "./node_modules/@types"
     ],
     "target": "es2020",

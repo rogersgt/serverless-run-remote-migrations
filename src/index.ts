@@ -411,7 +411,11 @@ export default class ServerlessRunRemoteMigrations {
         });
       }
       // run task
-      const taskStack = await this.upsertCloudformationStack(normalize(join(__dirname, 'cloudformation.yml')), parameters, taskStackName);
+      const taskStack = await this.upsertCloudformationStack(
+        normalize(join(__dirname, 'cloudformation/fargate.yml')),
+        parameters,
+        taskStackName,
+      );
 
       // const ec2Client = new EC2Client(this.awsCreds);
       const ecsClient = this.ecsClient || new ECSClient(this.awsCreds);
