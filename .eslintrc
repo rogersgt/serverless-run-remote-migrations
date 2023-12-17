@@ -1,0 +1,49 @@
+{
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/eslint-recommended",
+    "plugin:@typescript-eslint/recommended",
+    "airbnb-base",
+    "airbnb-typescript/base"
+  ],
+  "rules": {
+    "indent": [
+      "error",
+      2
+    ],
+    "require-jsdoc": 0,
+    "object-curly-spacing": [
+      "error",
+      "always"
+    ],
+    "max-len": [
+      "error",
+      {
+        "code": 140
+      }
+    ],
+    "semi": 0,
+    "no-invalid-this": 0,
+    "import/no-import-module-exports": 0,
+    "no-promise-executor-return": 0,
+    "@typescript-eslint/no-explicit-any": 0,
+    "prefer-promise-reject-errors": 0
+  },
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "project": "./tsconfig.json"
+  },
+  "plugins": [
+    "@typescript-eslint",
+    "import"
+  ],
+  "globals": {
+    "console": true,
+    "process": true,
+    "module": true,
+    "require": true,
+    "Promise": true,
+    "Buffer": true,
+    "setTimeout": true
+  }
+}

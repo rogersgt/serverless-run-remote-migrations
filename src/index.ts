@@ -1,5 +1,4 @@
-import sls from 'serverless'; // eslint-disable-line no-unused-vars
-import childProcess from 'child_process';
+import sls from 'serverless';
 import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 import {
   ECRClient,
@@ -19,34 +18,52 @@ import {
   DeleteStackCommand,
 } from '@aws-sdk/client-cloudformation';
 import { ECSClient, RunTaskCommand, DescribeTasksCommand } from '@aws-sdk/client-ecs';
+import Dockerode from 'dockerode';
+import {
+  EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand,
+} from '@aws-sdk/client-ec2';
+
 import { readFileSync } from 'fs';
 import { normalize, join } from 'path';
-import Dockerode from 'dockerode';
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
+import childProcess from 'child_process';
 
-class ServerlessRunRemoteMigrations {
+export default class ServerlessRunRemoteMigrations {
   serverless: sls;
-  log: (msg: any) => void;
+
+  log: (msg: unknown) => void;
+
   name = 'serverless-run-remote-migrations';
+
   region: string;
+
   docker: Dockerode;
+
   awsCreds: {
     region: string;
   };
+
   lastTaskStatus: string;
+
   lastStackStatus: string;
+
   ecsClient!: ECSClient;
+
   cloudformationClient!: CloudFormationClient;
+
   ecrClient!: ECRClient;
+
   ec2Client!: EC2Client;
+
   commands: {
     [cmd: string]: {
       lifecycleEvents?: string[];
     }
   };
+
   hooks: {
     [name: string]: () => Promise<any>;
   };
+
   image?: string;
 
   /**
@@ -55,7 +72,7 @@ class ServerlessRunRemoteMigrations {
    * @param {object} cliOptions serverless CLI options
    * @param {object} serverlessUtils serverless utility tools like log
    */
-  constructor(serverless: sls, _cliOptions: unknown, { log }: { log: (msg: any) => {} }) {
+  constructor(serverless: sls, _cliOptions: unknown, { log }: { log: (msg: any) => void }) {
     this.serverless = serverless;
 
     this.log = log;
@@ -78,7 +95,7 @@ class ServerlessRunRemoteMigrations {
     }
     this.commands = {
       runRemoteMigrations: {
-        lifecycleEvents: ['run']
+        lifecycleEvents: ['run'],
       },
     };
     this.hooks = {
@@ -93,7 +110,7 @@ class ServerlessRunRemoteMigrations {
     const { stackName } = deploy.aws ?? {};
     if (stackName) return `${stackName}`;
     const appName = this.serverless.service.service;
-    const stage = this.serverless.service.provider.stage;
+    const { stage } = this.serverless.service.provider;
     return `${appName}-${stage}-migrations`;
   }
 
@@ -105,12 +122,11 @@ class ServerlessRunRemoteMigrations {
   }
 
   /**
-   * 
-   * @param {import('@aws-sdk/client-ecr').ImageIdentifier[]} imageIds 
-   * @param {string | undefined} nextToken 
+   *
+   * @param {import('@aws-sdk/client-ecr').ImageIdentifier[]} imageIds
+   * @param {string | undefined} nextToken
    */
   async getAllImageIdsFromRepo(imageIds: ImageIdentifier[] = [], nextToken?: string) {
-
     const repoName = this.getRepoName();
     const { imageIds: nextImageIds, nextToken: newNextToken } = await this.ecrClient.send(new ListImagesCommand({
       repositoryName: repoName,
@@ -124,6 +140,7 @@ class ServerlessRunRemoteMigrations {
     }
     return allImageIds;
   }
+
   async remove() {
     const { deploy = {} } = this.getConfig();
     if (deploy.aws) {
@@ -137,9 +154,9 @@ class ServerlessRunRemoteMigrations {
         imageIds,
         repositoryName,
       }));
-     await this.ecrClient.send(new DeleteRepositoryCommand({
-      repositoryName,
-     }));
+      await this.ecrClient.send(new DeleteRepositoryCommand({
+        repositoryName,
+      }));
     }
   }
 
@@ -151,7 +168,7 @@ class ServerlessRunRemoteMigrations {
         StackName: stackName,
         TemplateBody: readFileSync(templatePath).toString(),
         Parameters: parameters,
-        Capabilities: ['CAPABILITY_IAM']
+        Capabilities: ['CAPABILITY_IAM'],
       });
       await client.send(cmd);
     } catch (error: any) {
@@ -162,13 +179,13 @@ class ServerlessRunRemoteMigrations {
         StackName: stackName,
         TemplateBody: readFileSync(templatePath).toString(),
         Parameters: parameters,
-        Capabilities: ['CAPABILITY_IAM']
+        Capabilities: ['CAPABILITY_IAM'],
       });
       try {
         await client.send(cmd);
-      } catch (error: any) {
-        if (!error.message || error.message !== 'No updates are to be performed.') {
-          throw error;
+      } catch (e: any) {
+        if (!e.message || e.message !== 'No updates are to be performed.') {
+          throw e;
         }
       }
     }
@@ -197,9 +214,8 @@ class ServerlessRunRemoteMigrations {
 
       this.lastStackStatus = '';
       return stack;
-    } else {
-      throw new Error(`${stackName} not found`);
     }
+    throw new Error(`${stackName} not found`);
   }
 
   async getStack(stackName) {
@@ -220,8 +236,8 @@ class ServerlessRunRemoteMigrations {
   }
 
   exec(cmd) {
-    const buff = childProcess.exec(cmd)
-    
+    const buff = childProcess.exec(cmd);
+
     return new Promise((res, rej) => {
       buff.on('message', (msg) => {
         this.log(msg);
@@ -234,16 +250,16 @@ class ServerlessRunRemoteMigrations {
         }
       });
       buff.on('error', console.error);
-    })
+    });
   }
 
   async pushImage(username, password) {
     const image = await this.getFullImageUri();
     this.log(`pushing docker image ${image}`);
     const builtImage = await this.docker.getImage(image);
-    
+
     const stream = await builtImage.push({
-      // @ts-ignore: requiring serveraddress, but it works without and idk what it should be
+      // @ts-expect-error: requiring serveraddress, but it works without and idk what it should be
       authconfig: {
         username,
         password,
@@ -251,7 +267,7 @@ class ServerlessRunRemoteMigrations {
       },
     }) as unknown as NodeJS.ReadableStream;
     const pushResp = await new Promise((resolve, reject) => {
-      this.docker.modem.followProgress(stream, (err, res) => err ? reject(err) : resolve(res));
+      this.docker.modem.followProgress(stream, (err, res) => (err ? reject(err) : resolve(res)));
     });
     return pushResp;
   }
@@ -276,7 +292,7 @@ class ServerlessRunRemoteMigrations {
 
   async upsertECRRepo() {
     const ecrCient = this.ecrClient || new ECRClient(this.awsCreds);
-    
+
     const repoName = this.getRepoName();
     try {
       const cmd = new DescribeRepositoriesCommand({
@@ -305,7 +321,7 @@ class ServerlessRunRemoteMigrations {
     this.log('Building sls migrations docker image');
     const { build = {} } = this.getConfig();
     const { dockerfile, context = '.' } = build;
-    if (!dockerfile) throw new Error(`Provide a build.dockerfile to excute for build docker image`);
+    if (!dockerfile) throw new Error('Provide a build.dockerfile to excute for build docker image');
     this.log(`building using ${dockerfile}`);
     await this.log('building db migrations image');
     const image = await this.getFullImageUri();
@@ -321,7 +337,7 @@ class ServerlessRunRemoteMigrations {
         } else {
           res(null);
         }
-      })
+      });
     });
     // const fullContext = path.normalize(path.join(process.cwd(), context));
     // const stream = await this.docker.buildImage({
@@ -348,33 +364,33 @@ class ServerlessRunRemoteMigrations {
     if (deploy.aws) {
       await this.upsertECRRepo();
       const { authorizationData } = await this.ecrLogin();
-      const { authorizationToken  } = authorizationData?.find((auth) => auth.authorizationToken) || {};
+      const { authorizationToken } = authorizationData?.find((auth) => auth.authorizationToken) || {};
       const [username, password] = Buffer.from(authorizationToken ?? '', 'base64').toString().split(':');
       await this.pushImage(username, password);
 
       const taskStackName = this.getTaskStackName();
 
       const parameters = [{
-          ParameterKey: 'RepoName',
-          ParameterValue: this.getRepoName(),
-        }, {
-          ParameterKey: 'Image',
-          ParameterValue: await this.getFullImageUri(),
-        }, {
-          ParameterKey: 'Cpu',
-          ParameterValue: deploy.cpu || 256,
-        }, {
-          ParameterKey: 'Memory',
-          ParameterValue: deploy.memory || 512,
-        },
-        {
-          ParameterKey: 'Command',
-          ParameterValue: deploy.command,
-        },
-        {
-          ParameterKey: 'SecretMode',
-          ParameterValue: deploy.aws.secret.valueFrom.startsWith('arn:aws:secretsmanager') ? 'secretsmanager' : 'ssm',
-        },
+        ParameterKey: 'RepoName',
+        ParameterValue: this.getRepoName(),
+      }, {
+        ParameterKey: 'Image',
+        ParameterValue: await this.getFullImageUri(),
+      }, {
+        ParameterKey: 'Cpu',
+        ParameterValue: deploy.cpu || 256,
+      }, {
+        ParameterKey: 'Memory',
+        ParameterValue: deploy.memory || 512,
+      },
+      {
+        ParameterKey: 'Command',
+        ParameterValue: deploy.command,
+      },
+      {
+        ParameterKey: 'SecretMode',
+        ParameterValue: deploy.aws.secret.valueFrom.startsWith('arn:aws:secretsmanager') ? 'secretsmanager' : 'ssm',
+      },
       ];
 
       if (deploy.aws.secret && deploy.aws.secret.valueFrom) {
@@ -385,7 +401,7 @@ class ServerlessRunRemoteMigrations {
         parameters.push({
           ParameterKey: 'SecretName',
           ParameterValue: deploy.aws.secret.name || 'DATABASE_URL',
-        })
+        });
       }
 
       if (deploy.aws.taskRoleArn) {
@@ -405,36 +421,38 @@ class ServerlessRunRemoteMigrations {
       let {
         securityGroupId,
         subnetId,
+      } = vpc;
+      const {
         autoAssignPublicIp = 'ENABLED',
       } = vpc;
 
       if (!securityGroupId || !subnetId) {
         const { Vpcs: vpcs } = await this.ec2Client.send(new DescribeVpcsCommand({}));
-        const defaultVpc = vpcs?.find((vpc) => vpc.IsDefault);
+        const defaultVpc = vpcs?.find((vpcInResponse) => vpcInResponse.IsDefault);
         if (!defaultVpc) {
-          throw new Error(`Default VPC not found!`);
+          throw new Error('Default VPC not found!');
         }
 
         const { Subnets: subnets = [] } = await this.ec2Client.send(new DescribeSubnetsCommand({
           Filters: [{
             Name: 'vpc-id',
-            Values: [defaultVpc.VpcId ?? '']
-          }]
+            Values: [defaultVpc.VpcId ?? ''],
+          }],
         }));
 
         if (!subnets.length && !subnetId) {
-          throw new Error(`No subnets found for vpc: ${defaultVpc.VpcId}`)
+          throw new Error(`No subnets found for vpc: ${defaultVpc.VpcId}`);
         }
 
         const { SecurityGroups: secGroups = [] } = await this.ec2Client.send(new DescribeSecurityGroupsCommand({
           Filters: [{
             Name: 'vpc-id',
-            Values: [defaultVpc.VpcId ?? '']
-          }]
+            Values: [defaultVpc.VpcId ?? ''],
+          }],
         }));
 
         if (!secGroups.length && !securityGroupId) {
-          throw new Error(`No security groups found for vpc ${defaultVpc.VpcId}`)
+          throw new Error(`No security groups found for vpc ${defaultVpc.VpcId}`);
         }
 
         subnetId = subnetId || subnets[0].SubnetId;
@@ -464,8 +482,8 @@ class ServerlessRunRemoteMigrations {
   }
 
   /**
-   * 
-   * @param {string} taskArn 
+   *
+   * @param {string} taskArn
    */
   async waitForTask(taskArn, cluster) {
     const cmd = new DescribeTasksCommand({
@@ -480,8 +498,16 @@ class ServerlessRunRemoteMigrations {
     }
 
     const task = tasks[0];
-    const { stopCode, lastStatus, startedAt, stoppedAt, stoppedReason, containers } = task;
-    if (stopCode === 'TaskFailedToStart' || stopCode === 'UserInitiated' || stopCode === 'TerminationNotice' || stopCode === 'SpotInterruption' || stopCode === 'ServiceSchedulerInitiated') {
+    const {
+      stopCode, lastStatus, startedAt, stoppedAt, stoppedReason, containers,
+    } = task;
+    if (
+      stopCode === 'TaskFailedToStart'
+      || stopCode === 'UserInitiated'
+      || stopCode === 'TerminationNotice'
+      || stopCode === 'SpotInterruption'
+      || stopCode === 'ServiceSchedulerInitiated'
+    ) {
       throw new Error(`db migrations task status stopCode: ${stopCode}`);
     }
 
@@ -506,11 +532,11 @@ class ServerlessRunRemoteMigrations {
     this.lastTaskStatus = '';
 
     if (migrationContainer.exitCode !== 0) {
-      throw new Error(`Db migrations task exited at ${stoppedAt} with error code: ${migrationContainer.exitCode}: ${stoppedReason}: ${stopCode}`);
+      throw new Error(
+        `Db migrations task exited at ${stoppedAt} with error code: ${migrationContainer.exitCode}: ${stoppedReason}: ${stopCode}`,
+      );
     }
 
     return task;
   }
 }
-
-module.exports = ServerlessRunRemoteMigrations;
